@@ -10,6 +10,7 @@ import {
 export interface Review {
   id: string;
   serviceId: string;
+  authorId: number;
   authorName: string;
   rating: number;
   comment: string;

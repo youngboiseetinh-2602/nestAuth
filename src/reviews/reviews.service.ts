@@ -1,9 +1,14 @@
 ﻿import { BadRequestException, Injectable } from '@nestjs/common';
 import type { CreateReviewDto, Review, UpdateReviewDto } from './dto/review.dto';
 import { NotFoundException } from '@nestjs/common';
+import { AuthorizationService } from '@nestjs/authorization';
+import { ReviewPolicy } from '../authorization/policies/review.policy';
+import type { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 
 @Injectable()
 export class ReviewsService {
+  constructor(private readonly authorization: AuthorizationService) {}
+
   private reviews: Review[] = [];
 
   private services = [
@@ -13,7 +18,7 @@ export class ReviewsService {
 
   private reviewIdCounter = 1;
 
-  createReview(serviceId: string, body: CreateReviewDto): Review {
+  createReview(serviceId: string, body: CreateReviewDto, authorId: number): Review {
     const service = this.services.find((item) => item.id === serviceId);
     if (!service) {
       throw new NotFoundException('Dịch vụ không tồn tại');
@@ -23,6 +28,7 @@ export class ReviewsService {
     const review = {
       id: `rev_${this.reviewIdCounter}`,
       serviceId,
+      authorId,
       authorName,
       rating,
       comment: comment ?? '',
@@ -40,8 +46,9 @@ export class ReviewsService {
     return this.reviews.filter((review) => review.serviceId === id);
   }
 
-  replaceReview(id: string, body: CreateReviewDto): Review {
+  async replaceReview(id: string, body: CreateReviewDto, user: AuthenticatedUser): Promise<Review> {
     const review = this.getReview(id);
+    await this.authorization.authorize(ReviewPolicy, 'update', user, review);
 
     const { authorName, rating, comment } = body;
     // CreateReviewDto cho phép thiếu comment khi POST, nhưng PUT cần đủ trường.
@@ -63,8 +70,9 @@ export class ReviewsService {
     return review;
   }
 
-  updateReview(id: string, body: UpdateReviewDto): Review {
+  async updateReview(id: string, body: UpdateReviewDto, user: AuthenticatedUser): Promise<Review> {
     const review = this.getReview(id);
+    await this.authorization.authorize(ReviewPolicy, 'update', user, review);
 
     const { authorName, rating, comment } = body;
 
@@ -84,7 +92,10 @@ export class ReviewsService {
   }
 
 
-  deleteReview(id: string): string {
+  async deleteReview(id: string, user: AuthenticatedUser): Promise<string> {
+    const review = this.getReview(id);
+    await this.authorization.authorize(ReviewPolicy, 'delete', user, review);
+
     const index = this.reviews.findIndex((review) => review.id === id);
     if (index === -1) {
       throw new NotFoundException('Đánh giá không tồn tại');
